@@ -1,31 +1,62 @@
 # Supermarket Sweep - Development Plan
 
 ## Project Overview
-Building a real-time Supermarket Sweep question game with separate host and contestant interfaces, WebSocket synchronization, and PostgreSQL persistence.
+Building a real-time Supermarket Sweep question game with separate host and contestant interfaces, WebSocket synchronization, and IndexedDB persistence.
 
 ---
 
 ## Phase 1: Foundation & Setup (Week 1)
 
-### 1.1 Database Design & Setup
-- [ ] Design PostgreSQL schema for Questions, Rounds, Contestants, Results
-- [ ] Create database migrations
-- [ ] Set up database connection pooling
-- [ ] Create seed data for testing (sample questions of each type)
-- [ ] Write database utility functions (CRUD operations)
+### 1.1 Database Design & Setup (Using Zero)
+- [ ] Define Zero schema with tables: Questions, Rounds, Contestants, Results
+- [ ] Set up table relationships (questions → rounds, contestants → results)
+- [ ] Define column structures with proper types (string, boolean, number)
+- [ ] Create arktype validators for type safety
+- [ ] Design query helpers using `defineQueries` for Questions, Rounds, Contestants
+- [ ] Create mutators for CRUD operations on all entities
+- [ ] Set up seed data for development (sample questions, test rounds)
+- [ ] Plan migration strategy for schema updates using Zero's version management
 
-### 1.2 WebSocket Infrastructure
-- [ ] Choose WebSocket library (e.g., Socket.io, ws, or native WebSockets)
-- [ ] Set up WebSocket server endpoint
-- [ ] Implement connection/reconnection logic
-- [ ] Create message protocol for host ↔ contestant sync
-- [ ] Test basic bidirectional communication
+**Zero Schema Overview:**
+```
+Tables:
+- questions (id, text, type, answer, options, clues, difficulty)
+- rounds (id, name, questions[], createdAt, status)
+- contestants (id, name, roundId, score, bonusTime)
+- results (id, roundId, contestantId, answers, finalScore, timestamp)
 
-### 1.3 Project Configuration
-- [ ] Set up environment variables (.env for database, WebSocket config)
-- [ ] Configure SvelteKit server endpoints for WebSocket handling
-- [ ] Set up development vs production configurations
-- [ ] Add necessary dependencies (postgres client, WebSocket library, etc.)
+Relationships:
+- rounds.questionIds → questions table
+- contestants.roundId → rounds table
+- results.roundId → rounds, results.contestantId → contestants
+```
+
+### 1.2 WebSocket & Sync Infrastructure (Using Zero)
+Zero provides built-in WebSocket sync without needing separate configuration:
+- [ ] Understand Zero's automatic sync mechanism (no manual WebSocket setup needed)
+- [ ] Set up Zero cache server for local development (runs on port 4848)
+- [ ] Configure server auth/userID for multi-client scenarios
+- [ ] Plan production sync backend (Zero can use Postgres via adapters)
+- [ ] Test offline-first behavior with mock network interruptions
+- [ ] Verify real-time sync between multiple concurrent contestants
+
+**Zero handles:**
+- Automatic bidirectional sync between host and contestants
+- Optimistic updates (mutations apply immediately locally)
+- Conflict resolution via CRDT semantics
+- Reconnection state recovery
+- Message protocol (internal to Zero)
+
+### 1.3 Project Configuration (Zero Setup)
+- [ ] Install dependencies: `@rocicorp/zero`, `zero-svelte`, `arktype`
+- [ ] Create `src/schema.ts` with Zero schema definition using `createSchema`
+- [ ] Create `src/mutators.ts` with mutator definitions for all operations
+- [ ] Create `src/lib/zero.svelte.ts` with Z instance initialization
+- [ ] Create `src/routes/api/mutate/+server.ts` for mutation endpoint
+- [ ] Create `src/routes/api/sync/+server.ts` for sync endpoint
+- [ ] Set environment variables: `PUBLIC_SERVER` (cache URL), optional auth
+- [ ] Disable SSR in `src/routes/+layout.ts` (required for client-side-only Zero)
+- [ ] Add `.env.local` for development (Zero cache config)
 
 ---
 
@@ -57,47 +88,47 @@ Building a real-time Supermarket Sweep question game with separate host and cont
 - [ ] Build UI component for 3-product display
 - [ ] Add host control for marking correct guesses
 
-### 2.2 Game State Management
-- [ ] Create centralized game state store (round, current question, timer, scores)
-- [ ] Implement question progression logic
-- [ ] Build timer functionality (2 min default, configurable)
-- [ ] Create scoring/bonus time calculation logic
-- [ ] Handle game start, pause, reset functionality
+### 2.2 Game State Management (With Zero Queries)
+- [ ] Create `queries.game.currentRound()` to fetch active round
+- [ ] Create `queries.game.currentQuestion()` derived from round state
+- [ ] Create `queries.contestants.byRound(roundId)` for real-time contestant list
+- [ ] Implement timer state using Svelte `$state` (not persisted to Zero)
+- [ ] Create `queries.results.byRound(roundId)` to track scores in real-time
+- [ ] Implement game progression logic via mutators (nextQuestion, updateScore)
+- [ ] Use Zero mutations for atomic score/time updates
+- [ ] Handle game start/pause/reset via mutators
 
 ---
 
 ## Phase 3: Host Interface (Week 3)
 
-### 3.1 Question Management (CRUD)
-- [ ] Create question list/library view
-- [ ] Build question creation form (supporting all question types)
-- [ ] Implement question editing interface
-- [ ] Add question deletion with confirmation
-- [ ] Create question type selector/switcher
+### 3.1 Question Management (CRUD via Zero Mutators)
+- [ ] Create UI component that calls `z.mutate(mutators.question.insert(...))`
+- [ ] Implement edit form calling `z.mutate(mutators.question.update(...))`
+- [ ] Add delete confirmation with `z.mutate(mutators.question.delete(...))`
+- [ ] Create question list view using `z.createQuery(queries.question.all())`
+- [ ] Use query `.data` for reactive list updates in Svelte components
 
-### 3.2 Round Setup
-- [ ] Build round creation interface
-- [ ] Implement question selection for rounds (3 questions)
-- [ ] Add contestant registration/management
-- [ ] Create pre-game setup checklist
+### 3.2 Round Setup (Zero Queries & Mutations)
+- [ ] Use `queries.question.all()` to display available questions
+- [ ] Implement round creation: `z.mutate(mutators.round.create(...))`
+- [ ] Add contestant registration: `z.mutate(mutators.contestant.register(...))`
+- [ ] Create round status query: `queries.round.byId(roundId)`
 
-### 3.3 Game Control Panel
-- [ ] Build live game control interface
-  - Next question button
-  - Reveal clue button (Progressive type)
-  - Trigger letter reveal (Hangman type)
-  - Mark contestant correct/incorrect
-  - Pause/resume timer
-- [ ] Show answer(s) to host (always visible)
-- [ ] Display contestant status and responses
-- [ ] Add contestant score/bonus time tracking
-- [ ] Implement sound trigger controls (correct/incorrect sounds)
+### 3.3 Game Control Panel (Zero-Driven Real-Time Updates)
+- [ ] Query active round with `queries.game.currentRound()`
+- [ ] Query contestants with `queries.contestants.byRound(roundId)`
+- [ ] Mutation: next question → `z.mutate(mutators.game.advanceQuestion(...))`
+- [ ] Mutation: mark answer → `z.mutate(mutators.result.recordAnswer(...))`
+- [ ] Mutation: update score → `z.mutate(mutators.contestant.updateScore(...))`
+- [ ] Real-time sync: all connected clients see updates instantly via Zero's sync
+- [ ] Host display uses queries that reactively update as contestants answer
 
 ### 3.4 Host Dashboard
-- [ ] Create overview of current game state
-- [ ] Build real-time contestant tracking display
-- [ ] Add timer visualization
-- [ ] Implement clue reveal timeline (Progressive type)
+- [ ] Query: `queries.game.currentRound()` - live round state
+- [ ] Query: `queries.contestants.byRound(roundId)` - reactive contestant list
+- [ ] Query: `queries.results.byRound(roundId)` - live score tracking
+- [ ] All components auto-update via Zero's reactive `.data` property
 
 ---
 
@@ -110,11 +141,11 @@ Building a real-time Supermarket Sweep question game with separate host and cont
 - [ ] Build price guess product display component
 - [ ] Ensure large, readable fonts and clear layout
 
-### 4.2 Game Status Display
-- [ ] Build prominent timer component
-- [ ] Create score/bonus time tracker
-- [ ] Add current question indicator (Question 1 of 3)
-- [ ] Implement real-time update handling
+### 4.2 Game Status Display (Reactive Zero Queries)
+- [ ] Build timer component (local `$state`, not in Zero)
+- [ ] Score display: `queries.results.byContestant(contestantId)`
+- [ ] Question indicator: derived from `queries.game.currentRound()`.questionIndex
+- [ ] Connection status: use `z.connectionState` (Zero provides this natively)
 
 ### 4.3 Contestant-Specific Features
 - [ ] Display contestant name/identifier
@@ -124,72 +155,73 @@ Building a real-time Supermarket Sweep question game with separate host and cont
 
 ---
 
-## Phase 5: Real-time Synchronization (Week 5)
+## Phase 5: Real-time Synchronization (Built-in Zero)
 
-### 5.1 WebSocket Event Handlers
-- [ ] Implement host → contestant events:
-  - Question change
-  - Clue reveal
-  - Letter reveal (Hangman)
-  - Timer updates
-  - Score updates
-  - Correct/incorrect marking
-- [ ] Implement contestant → host events:
-  - Connection status
-  - Acknowledgment receipts
+Zero handles all real-time sync automatically—no manual WebSocket event handlers needed.
 
-### 5.2 State Synchronization
-- [ ] Ensure consistent state between host and contestants
-- [ ] Handle late-joining contestants (send current state)
-- [ ] Implement reconnection state recovery
-- [ ] Add conflict resolution for timing edge cases
+### 5.1 Automatic State Sync (Zero's CRDT Engine)
+- [ ] Host mutations (e.g., `nextQuestion`) sync to all connected clients instantly
+- [ ] Contestant data updates (answers, scores) sync back to host in real-time
+- [ ] Test: Multiple browser windows as host/contestant—verify live sync
+- [ ] Verify: Late-joining contestants receive full round state on first sync
+- [ ] Test: Network interruption → automatic reconnection + state recovery
+
+### 5.2 Zero Connection Management
+- [ ] Monitor `z.connectionState` in UI (connecting → connected/disconnected)
+- [ ] Implement reconnection UI: show "Connecting..." during outages
+- [ ] Use `z.connection.connect()` for manual auth retry if needed
+- [ ] Verify: Offline changes queue locally, sync when reconnected (CRDT)
 
 ### 5.3 Testing & Reliability
-- [ ] Test with multiple simultaneous contestants
-- [ ] Simulate network interruptions and reconnections
-- [ ] Load test with expected contestant count
-- [ ] Add error handling and fallback UI
+- [ ] Multi-client sync: Open 3+ browser windows, verify all see updates
+- [ ] Offline resilience: Disconnect network mid-game, verify app doesn't crash
+- [ ] Reconnection: Restore network, verify all changes sync correctly
+- [ ] Load test: Verify sync performance with 20+ concurrent contestants
 
 ---
 
-## Phase 6: Database Integration (Week 6)
+## Phase 6: Client-Side Data Management (Zero Queries & Local-First)
 
-### 6.1 API Endpoints
-- [ ] Create REST/GraphQL endpoints for:
-  - Questions CRUD
-  - Rounds CRUD
-  - Contestants CRUD
-  - Results retrieval
-- [ ] Implement server-side validation
-- [ ] Add error handling and logging
+### 6.1 Zero Query Setup
+- [ ] Define `queries.question.all()` for question library
+- [ ] Define `queries.round.byId(id)` for round details
+- [ ] Define `queries.contestants.byRound(roundId)` for contestant list
+- [ ] Define `queries.results.byContestant(contestantId)` for individual scores
+- [ ] Create validators using arktype for all query inputs
+- [ ] All queries auto-sync with local cache; no explicit fetch needed
 
-### 6.2 Data Persistence
-- [ ] Save questions to database
-- [ ] Store round configurations
-- [ ] Record contestant data
-- [ ] Save game results (optional for MVP)
+### 6.2 Data Persistence (Automatic via Zero)
+- [ ] Zero automatically persists data to IndexedDB on client
+- [ ] Questions synced server-side (via Zero cache server/Postgres)
+- [ ] Rounds and contestant data synced automatically
+- [ ] Results persisted locally and synced when connection available
+- [ ] No manual IndexedDB code needed (Zero handles it)
 
-### 6.3 Data Loading
-- [ ] Load pre-created questions for rounds
-- [ ] Fetch contestant information
-- [ ] Retrieve historical results (if implemented)
-- [ ] Implement caching strategy for performance
+### 6.3 Data Loading (Lazy via Queries)
+- [ ] On app start: `z.createQuery(queries.question.all())` loads from cache
+- [ ] First load uses cached IndexedDB data instantly
+- [ ] Background sync with server happens automatically
+- [ ] Contestants auto-load from `queries.contestants.byRound(roundId)`
+- [ ] Results streamed in real-time as answers are recorded
 
 ---
 
 ## Phase 7: Routing & Navigation (Week 7)
 
 ### 7.1 Page Routes
-- [ ] `/questions/host` - Host control interface
-- [ ] `/questions/contestant` - Contestant display
-- [ ] `/questions/setup` - Pre-game question/round setup
-- [ ] `/` - Landing page with role selection
-- [ ] Handle route guards and access control (if needed)
+- [ ] `/` - Landing page with role selection (host/contestant)
+- [ ] `/questions` - Question library (CRUD via Zero mutators)
+- [ ] `/rounds` - Round management (create, select, delete)
+- [ ] `/rounds/[id]/setup` - Pre-game setup (select questions, register contestants)
+- [ ] `/rounds/[id]/host` - Host control interface (real-time via Zero queries)
+- [ ] `/rounds/[id]/contestant/[contestantId]` - Contestant display
+- [ ] Ensure SSR disabled in root `+layout.ts` (required for Zero client-only mode)
 
 ### 7.2 Navigation Flow
-- [ ] Setup → Host starts round → Contestants join → Game play → Results
-- [ ] Back navigation safeguards (confirm before leaving active game)
-- [ ] URL parameter handling for round IDs, contestant IDs
+- [ ] Landing → Create/Join Round → Setup → Host Starts → Contestant Views → Results
+- [ ] Back navigation safeguards: Warn if leaving active game
+- [ ] URL parameters: `roundId`, `contestantId` passed in routes
+- [ ] Use SvelteKit's `+page.ts` to load initial Zero queries via preload
 
 ---
 
@@ -243,10 +275,10 @@ Building a real-time Supermarket Sweep question game with separate host and cont
 
 ### 10.1 Deployment Setup
 - [ ] Choose hosting platform (Vercel, Railway, etc.)
-- [ ] Set up production database (PostgreSQL)
 - [ ] Configure environment variables for production
 - [ ] Set up WebSocket server for production
 - [ ] Test production build locally
+- [ ] Verify IndexedDB functionality in production environment
 
 ### 10.2 Documentation
 - [ ] Write user guide for hosts
@@ -269,18 +301,24 @@ Building a real-time Supermarket Sweep question game with separate host and cont
 - **Svelte 5** with SvelteKit 2
 - **TypeScript** (strict mode)
 - **Vite 7** for bundling
-- Real-time UI updates via WebSocket
+- **zero-svelte** for reactive Zero queries
+- **Zero** for local-first sync (replaces manual WebSocket)
+- **arktype** for schema validation
 
-### Backend
-- **SvelteKit server routes** for API endpoints
-- **WebSocket server** (integrated with SvelteKit)
-- **PostgreSQL** for data persistence
-- Connection pooling for database
+### Backend / Sync Layer
+- **Zero Cache Server** (local dev on port 4848)
+- **Production:** Zero adapter for Postgres (via `@rocicorp/zero/server/adapters/pg`)
+- **SvelteKit API endpoints:**
+  - `POST /api/mutate` - Processes mutations
+  - `POST /api/sync` - Handles sync protocol
+  - These endpoints authenticate and route to Zero handlers
 
-### Development Tools
-- **svelte-check** for type checking
-- **vite-plugin-devtools-json** for dev experience
-- Testing framework (Vitest or Playwright)
+### Key Zero Architecture
+- **CRDT-based sync**: Offline changes merge automatically when reconnected
+- **Reactive queries**: Use Svelte 5 runes (`$state`, `$derived`) for reactivity
+- **IndexedDB cache**: Zero manages local persistence automatically
+- **Optimistic updates**: Mutations apply locally immediately, sync in background
+- **No manual WebSocket code**: Zero abstracts all network communication
 
 ---
 
@@ -317,7 +355,218 @@ Building a real-time Supermarket Sweep question game with separate host and cont
 
 ---
 
-## Future Enhancements (Post-MVP)
+## Zero Integration Guide
+
+### Installation & Setup Checklist
+```bash
+npm install @rocicorp/zero zero-svelte arktype
+```
+
+### Core Files to Create
+
+#### 1. `src/schema.ts` - Zero Schema Definition
+```typescript
+import { createBuilder, createSchema, defineQueries, defineQuery, table, string, boolean, number, relationships } from '@rocicorp/zero';
+import { type } from 'arktype';
+
+// Define tables
+const questions = table('question')
+  .columns({ id: string(), text: string(), type: string(), answer: string(), difficulty: number() })
+  .primaryKey('id');
+
+const rounds = table('round')
+  .columns({ id: string(), name: string(), status: string(), createdAt: number() })
+  .primaryKey('id');
+
+const contestants = table('contestant')
+  .columns({ id: string(), name: string(), roundId: string(), score: number() })
+  .primaryKey('id');
+
+const results = table('result')
+  .columns({ id: string(), roundId: string(), contestantId: string(), answers: string(), timestamp: number() })
+  .primaryKey('id');
+
+export const schema = createSchema({
+  tables: [questions, rounds, contestants, results],
+  relationships: [
+    // roundQuestions, etc.
+  ]
+});
+
+// Define reusable queries with validators
+export const queries = defineQueries({
+  question: {
+    all: defineQuery(() => zql.question),
+    byId: defineQuery(type({ id: 'string' }), ({ args: { id } }) => zql.question.where('id', '=', id))
+  },
+  round: {
+    byId: defineQuery(type({ id: 'string' }), ({ args: { id } }) => zql.round.where('id', '=', id))
+  },
+  contestants: {
+    byRound: defineQuery(type({ roundId: 'string' }), ({ args: { roundId } }) => zql.contestant.where('roundId', '=', roundId))
+  }
+});
+
+declare module '@rocicorp/zero' {
+  interface DefaultTypes {
+    schema: typeof schema;
+  }
+}
+```
+
+#### 2. `src/mutators.ts` - Mutations for CRUD Operations
+```typescript
+import { defineMutators, defineMutator } from '@rocicorp/zero';
+
+export const mutators = defineMutators({
+  question: {
+    insert: defineMutator<{ id: string; text: string; type: string; answer: string; difficulty: number }>(
+      async ({ tx, args }) => {
+        await tx.mutate.question.insert(args);
+      }
+    ),
+    update: defineMutator<{ id: string; text?: string; answer?: string }>(
+      async ({ tx, args: { id, ...updates } }) => {
+        await tx.mutate.question.update({ id, ...updates });
+      }
+    ),
+    delete: defineMutator<{ id: string }>(
+      async ({ tx, args: { id } }) => {
+        await tx.mutate.question.delete({ id });
+      }
+    )
+  },
+  // Similar patterns for round, contestant, result mutators
+});
+```
+
+#### 3. `src/lib/zero.svelte.ts` - Z Instance Initialization
+```typescript
+import { PUBLIC_SERVER } from '$env/static/public';
+import { Z } from 'zero-svelte';
+import { schema } from '../schema.js';
+import { mutators } from '../mutators.js';
+
+export const z = new Z({
+  cacheURL: PUBLIC_SERVER,
+  schema,
+  mutators,
+  userID: 'anon', // or authenticated user ID
+  kvStore: 'idb'  // IndexedDB for persistence
+});
+
+export { mutators };
+```
+
+#### 4. `src/routes/+layout.ts` - Disable SSR
+```typescript
+export const ssr = false; // Required: Zero is client-only
+```
+
+#### 5. `src/routes/api/mutate/+server.ts` - Mutation Endpoint
+```typescript
+import { handleMutateRequest } from '@rocicorp/zero/server';
+// Handles mutation requests from Z instance
+```
+
+#### 6. `src/routes/api/sync/+server.ts` - Sync Endpoint
+```typescript
+import { handleSyncRequest } from '@rocicorp/zero/server';
+// Handles sync protocol for bidirectional data sync
+```
+
+#### 7. `.env.local` - Development Configuration
+```
+PUBLIC_SERVER=http://localhost:4848
+```
+
+### Usage Patterns in Components
+
+#### Create a Query
+```svelte
+<script lang="ts">
+  import { z, mutators } from '$lib/zero.svelte';
+  import { queries } from '../schema';
+  
+  const questions = z.createQuery(queries.question.all());
+</script>
+
+{#each questions.data as q (q.id)}
+  <div>{q.text}</div>
+{/each}
+```
+
+#### Perform a Mutation
+```svelte
+<script lang="ts">
+  import { z, mutators } from '$lib/zero.svelte';
+  
+  function addQuestion(text: string) {
+    z.mutate(mutators.question.insert({
+      id: crypto.randomUUID(),
+      text,
+      type: 'fillBlank',
+      answer: 'test',
+      difficulty: 1
+    }));
+  }
+</script>
+
+<button onclick={() => addQuestion('New Q')}>Add</button>
+```
+
+#### Reactive Queries with $derived
+```svelte
+<script lang="ts">
+  let roundId = $state('round-1');
+  const contestants = $derived(z.createQuery(queries.contestants.byRound({ roundId })));
+</script>
+```
+
+#### Monitor Connection
+```svelte
+<script lang="ts">
+  import { z } from '$lib/zero.svelte';
+</script>
+
+{#if z.connectionState.name === 'connected'}
+  <span>✓ Connected</span>
+{:else if z.connectionState.name === 'connecting'}
+  <span>⟳ Connecting...</span>
+{/if}
+```
+
+### Development Workflow
+
+1. **Local Development:**
+   - Run Zero cache server: `zero-cache` (port 4848)
+   - Run SvelteKit dev: `npm run dev`
+   - App syncs with cache server automatically
+
+2. **Multi-Client Testing:**
+   - Open multiple browser windows/tabs
+   - Changes in one instantly sync to others
+   - Simulate offline by disabling network in DevTools
+
+3. **Production Deployment:**
+   - Configure Zero with Postgres adapter
+   - Set `PUBLIC_SERVER` to production sync URL
+   - Deploy SvelteKit app alongside Zero sync server
+
+### Key Advantages of Zero
+
+✅ **Automatic sync** - No manual WebSocket code  
+✅ **Offline-first** - Changes queue locally, sync when reconnected  
+✅ **Type-safe** - Full TypeScript support via schema definitions  
+✅ **Real-time** - CRDTs handle concurrent edits automatically  
+✅ **Optimistic updates** - Mutations appear instantly, resolve in background  
+✅ **Reactive** - Svelte 5 runes make UI update automatically  
+
+### References
+
+- [Zero Documentation](https://zero.rocicorp.dev/docs/introduction)
+- [zero-svelte GitHub](https://github.com/stolinski/zero-svelte)
+- [Zero Sync Video](https://www.youtube.com/watch?v=hAxdOUgjctk&ab_channel=Syntax)
 
 1. **Multiple simultaneous rounds** - Support concurrent games
 2. **User authentication** - Secure login for hosts/contestants
