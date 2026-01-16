@@ -1,38 +1,39 @@
-# sv
+# Supermarket Sweep Question Rounds
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+A SvelteKit app for running Supermarket Sweep-style question rounds with separate host and contestant views that stay in sync in real time.
 
-## Creating a project
+## What it does (planned)
+- Host control panel to reveal clues, advance questions, and mark correct contestants
+- Contestant display with large, readable clues/answers and timers
+- Multiple question types: hangman-style reveal, progressive clues, fill-in-the-blank, guess-the-price
+- Competitive scoring with time bonuses for correct answers
+- Real-time updates between host and contestants
+- Questions authored ahead of time and stored in PostgreSQL
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Tech stack
+- SvelteKit 2 with Svelte 5 runes
+- TypeScript (strict)
+- Vite 7
+- WebSocket for real-time sync
+- PostgreSQL for persistence (planned)
 
+## Getting started (Deno)
+1) Run the dev server
 ```sh
-# create a new project in the current directory
-npx sv create
-
-# create a new project in my-app
-npx sv create my-app
+deno task dev
+```
+2) Type check
+```sh
+deno task check
+```
+3) Build
+```sh
+deno task build
 ```
 
-## Developing
+## Project layout
+- src/routes/ — pages (host and contestant screens will live here)
+- src/lib/ — shared components/utilities
+- static/ — public assets
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+See the full requirements in [REQUIREMENTS.md](REQUIREMENTS.md).
